@@ -133,11 +133,13 @@ namespace InteractableSettings
                 {
                     if (__instance.maxSpeed == ForcePullGripIdentifier)
                     {
-                        return false;
+                        return false; // Force Pull Grip is ON and Force Pull Anything is OFF and the grip instance is an Anything grip
                     }
+                    return true; // Force Pull Grip is ON and Force Pull Anything is OFF and the grip instance is NOT an Anything grip
                 }
-            }
-            return true;
+                return true; // Force Pull Grip is ON and Force Pull Anything is ON so grip instance is not checked
+            } 
+            return false; // Force Pull Grip is OFF so nothing else needs to be checked and the object will not be force pulled
         }
 
         // Force Pull Grip collision disable + Force Pull Max Force override
