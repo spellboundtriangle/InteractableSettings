@@ -5,6 +5,8 @@ Interactable Settings mod for BONELAB
 - Disabling Interactable Icon
 - Disabling Force Pull Grip
 - Disabling object collision during force pull
+- Overriding force pull max force
+- Allowing force pulling more objects
 
 ## Requirements
 - MelonLoader (v0.6.5+ recommended)

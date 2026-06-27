@@ -210,25 +210,27 @@ namespace InteractableSettings
             }
         }
 
-        // Force Pull Grip everything
+        // Add Force Pull Grip to everything
         [HarmonyLib.HarmonyPatch(typeof(Grip), "Start")]
         [HarmonyLib.HarmonyPostfix]
         public static void ForcePullGrip_AddForcePullGrip(Grip __instance)
         {
-            if (!__instance.GetComponent<ForcePullGrip>())
-            { // Execute if there is no Force Pull Grip on the grip
-                if (!__instance.transform.root.gameObject.GetComponentInChildren<ForcePullGrip>())
-                { // Execute if there are no Force Pull Grips on the entire entity
-                    ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
-                    fpg.maxSpeed = ForcePullGripIdentifier;
+            if(__instance.GetType() != typeof(GenericGrip))
+            {         // Execute if is not a Generic Grip because it can't be force pulled
+                if (!__instance.GetComponent<ForcePullGrip>())
+                {     // Execute if there is no Force Pull Grip on the grip
+                    if (!__instance.transform.root.gameObject.GetComponentInChildren<ForcePullGrip>())
+                    { // Execute if there are no Force Pull Grips on the entire entity
+                        ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
+                        fpg.maxSpeed = ForcePullGripIdentifier;
+                    }
                 }
                 else
-                { // Execute if there is at least one Force Pull Grip already
+                {     // Execute if there is at least one Force Pull Grip already
                     ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
                     fpg.maxSpeed = ExtraForcePullGripIdentifier;
                 }
             }
-            
         }
     }
 }
