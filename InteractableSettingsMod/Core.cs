@@ -17,18 +17,26 @@ namespace InteractableSettings
 {
     public class InteractableSettingsMod : MelonMod
     {
-        public static int HandLayerMask { get; set; }
+        public static int PlayerHandLayerMask { get; set; }
+        public static int FarHoverHandLayerMask { get; set; }
+        public enum ForcePullMode
+        {
+            OFF,
+            ON,
+            ANYTHING,
+            PER_ENTITY,
+        }
 
         // Preferences variables
         public static MelonPreferences_Category InteractableSettings_Category;
         public static MelonPreferences_Entry<bool> InteractableIcon_HandHover_Enabled;
         public static MelonPreferences_Entry<bool> InteractableIcon_FarHandHover_Enabled;
-        public static MelonPreferences_Entry<bool> ForcePullGrip_Enabled;
+        public static MelonPreferences_Entry<ForcePullMode> ForcePullGrip_ForcePullMode;
         public static MelonPreferences_Entry<bool> ForcePullGrip_Collision_Enabled;
-        public static MelonPreferences_Entry<bool> ForcePullGrip_ForcePullAnything_Enabled;
         public static MelonPreferences_Entry<bool> ForcePullGrip_ForcePullThroughObjects_Enabled;
         public static MelonPreferences_Entry<float> ForcePullGrip_MaxForce;
         public static MelonPreferences_Entry<bool> ForcePullGrip_AprilFooled;
+
 
         public override void OnInitializeMelon()
         {
@@ -47,9 +55,8 @@ namespace InteractableSettings
                 }
                 Page BoneMenu_ForcePullGripPage = BoneMenu_MainPage.CreatePage("Force Pull Grip", Color.cyan);
                 {
-                    BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Grip", Color.cyan, ref ForcePullGrip_Enabled, prefDefaultValue: true);
+                    BoneMenu_ForcePullGripPage.CreateEnumPref("Force Pull", Color.cyan, ref ForcePullGrip_ForcePullMode, OnChangeForcePullMode, prefDefaultValue:ForcePullMode.ON);
                     BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Collision", Color.cyan, ref ForcePullGrip_Collision_Enabled, prefDefaultValue: true);
-                    BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Anything", Color.cyan, ref ForcePullGrip_ForcePullAnything_Enabled, prefDefaultValue: false);
                     BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Through Objects", Color.cyan, ref ForcePullGrip_ForcePullThroughObjects_Enabled, OnEnableForcePullThroughObjects, prefDefaultValue: false);
                     FloatElement FPGMaxForce = BoneMenu_ForcePullGripPage.CreateFloatPref("Force Pull Max Force", Color.cyan, ref ForcePullGrip_MaxForce, 50f, -500000f, 500000f, prefDefaultValue: 250f);
                         FPGMaxForce.SetTooltip("Default 250");
@@ -65,17 +72,23 @@ namespace InteractableSettings
             }
             BoneLib.Hooking.OnLevelLoaded += LevelLoaded;
 
-            LoggerInstance.Msg("InteractableSettings Initialized.");
+            LoggerInstance.Msg(" Initialized.");
         }
 
-        // Set layermask for pulling through objects
+        // Set layermasks for pulling through objects
         private void LevelLoaded(LevelInfo info)
         {
-            HandLayerMask = Player.LeftHand.playerLayerMask;
+            PlayerHandLayerMask = Player.LeftHand.playerLayerMask;
             if (ForcePullGrip_ForcePullThroughObjects_Enabled.Value)
             {
                 Player.LeftHand.playerLayerMask = int.MaxValue;
                 Player.RightHand.playerLayerMask = int.MaxValue;
+            }
+            FarHoverHandLayerMask = Player.LeftHand.farHoverLayerMask;
+            if (ForcePullGrip_ForcePullMode.Value == ForcePullMode.ANYTHING || ForcePullGrip_ForcePullMode.Value == ForcePullMode.PER_ENTITY)
+            {
+                Player.LeftHand.farHoverLayerMask = int.MaxValue;
+                Player.RightHand.farHoverLayerMask = int.MaxValue;
             }
         }
 
@@ -94,8 +107,22 @@ namespace InteractableSettings
             }
             else
             {
-                Player.LeftHand.playerLayerMask = HandLayerMask;
-                Player.RightHand.playerLayerMask = HandLayerMask;
+                Player.LeftHand.playerLayerMask = PlayerHandLayerMask;
+                Player.RightHand.playerLayerMask = PlayerHandLayerMask;
+            }
+        }
+
+        public static void OnChangeForcePullMode(Enum value)
+        {
+            if ((ForcePullMode)value == ForcePullMode.ANYTHING || (ForcePullMode)value == ForcePullMode.PER_ENTITY)
+            {
+                Player.LeftHand.farHoverLayerMask = int.MaxValue;
+                Player.RightHand.farHoverLayerMask = int.MaxValue;
+            }
+            else
+            {
+                Player.LeftHand.farHoverLayerMask = FarHoverHandLayerMask;
+                Player.RightHand.farHoverLayerMask = FarHoverHandLayerMask;
             }
         }
     }
@@ -104,7 +131,8 @@ namespace InteractableSettings
     [HarmonyLib.HarmonyPatch]
     public static class Patches
     {
-        private const float ForcePullGripIdentifier = -1.789f;
+        private const float ForcePullGripIdentifier = -57f;
+        private const float ExtraForcePullGripIdentifier = -58f;
 
         // Interactable Icon Hand Hover disable
         [HarmonyLib.HarmonyPatch(typeof(InteractableIcon), "MyHandHoverBegin")]
@@ -127,19 +155,31 @@ namespace InteractableSettings
         [HarmonyLib.HarmonyPrefix]
         public static bool ForcePullGrip_OnFarHandHoverUpdateDisable(ForcePullGrip __instance)
         {
-            if (InteractableSettingsMod.ForcePullGrip_Enabled.Value)
+            switch (InteractableSettingsMod.ForcePullGrip_ForcePullMode.Value)
             {
-                if (!InteractableSettingsMod.ForcePullGrip_ForcePullAnything_Enabled.Value)
-                {
-                    if (__instance.maxSpeed == ForcePullGripIdentifier)
+                case InteractableSettingsMod.ForcePullMode.OFF:        // Never force pull
+                    return false;
+
+                case InteractableSettingsMod.ForcePullMode.ON:         // Only force pulls if not using either identifier float
+                    if (__instance.maxSpeed != ForcePullGripIdentifier && __instance.maxSpeed != ExtraForcePullGripIdentifier)
                     {
-                        return false; // Force Pull Grip is ON and Force Pull Anything is OFF and the grip instance is an Anything grip
+                        return true;
                     }
-                    return true; // Force Pull Grip is ON and Force Pull Anything is OFF and the grip instance is NOT an Anything grip
-                }
-                return true; // Force Pull Grip is ON and Force Pull Anything is ON so grip instance is not checked
-            } 
-            return false; // Force Pull Grip is OFF so nothing else needs to be checked and the object will not be force pulled
+                    else return false;
+
+                case InteractableSettingsMod.ForcePullMode.ANYTHING:   // Always allow force pull
+                    return true;
+
+                case InteractableSettingsMod.ForcePullMode.PER_ENTITY: // Disallow force pull on identified "extra" force pulls
+                    if (__instance.maxSpeed == ExtraForcePullGripIdentifier)
+                    {
+                        return false;
+                    }
+                    else return true;
+
+                default:
+                    return true;
+            }
         }
 
         // Force Pull Grip collision disable + Force Pull Max Force override
@@ -175,11 +215,20 @@ namespace InteractableSettings
         [HarmonyLib.HarmonyPostfix]
         public static void ForcePullGrip_AddForcePullGrip(Grip __instance)
         {
-            if (__instance.GetComponent<ForcePullGrip>() == null)
-            {
-                ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
-                fpg.maxSpeed = ForcePullGripIdentifier;
+            if (!__instance.GetComponent<ForcePullGrip>())
+            { // Execute if there is no Force Pull Grip on the grip
+                if (!__instance.transform.root.gameObject.GetComponentInChildren<ForcePullGrip>())
+                { // Execute if there are no Force Pull Grips on the entire entity
+                    ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
+                    fpg.maxSpeed = ForcePullGripIdentifier;
+                }
+                else
+                { // Execute if there is at least one Force Pull Grip already
+                    ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
+                    fpg.maxSpeed = ExtraForcePullGripIdentifier;
+                }
             }
+            
         }
     }
 }
