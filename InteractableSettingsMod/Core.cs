@@ -19,6 +19,9 @@ namespace InteractableSettings
     {
         public static int PlayerHandLayerMask { get; set; }
         public static int FarHoverHandLayerMask { get; set; }
+        public const int PullAnythingMask = -5269889; // Excludes player layer
+
+        // Preferences variables
         public enum ForcePullMode
         {
             OFF,
@@ -26,8 +29,6 @@ namespace InteractableSettings
             ANYTHING,
             PER_ENTITY,
         }
-
-        // Preferences variables
         public static MelonPreferences_Category InteractableSettings_Category;
         public static MelonPreferences_Entry<bool> InteractableIcon_HandHover_Enabled;
         public static MelonPreferences_Entry<bool> InteractableIcon_FarHandHover_Enabled;
@@ -75,7 +76,7 @@ namespace InteractableSettings
             LoggerInstance.Msg(" Initialized.");
         }
 
-        // Set layermasks for pulling through objects
+        // Set layermasks
         private void LevelLoaded(LevelInfo info)
         {
             PlayerHandLayerMask = Player.LeftHand.playerLayerMask;
@@ -87,17 +88,17 @@ namespace InteractableSettings
             FarHoverHandLayerMask = Player.LeftHand.farHoverLayerMask;
             if (ForcePullGrip_ForcePullMode.Value == ForcePullMode.ANYTHING || ForcePullGrip_ForcePullMode.Value == ForcePullMode.PER_ENTITY)
             {
-                Player.LeftHand.farHoverLayerMask = int.MaxValue;
-                Player.RightHand.farHoverLayerMask = int.MaxValue;
+                Player.LeftHand.farHoverLayerMask = PullAnythingMask;
+                Player.RightHand.farHoverLayerMask = PullAnythingMask;
             }
         }
 
+        // BoneMenu methods
         public static void SavePreferences() 
         {
             InteractableSettings_Category.SaveToFile(false);
         }
 
-        // BoneMenu methods
         public static void OnEnableForcePullThroughObjects(bool value)
         {
             if (value)
@@ -116,8 +117,8 @@ namespace InteractableSettings
         {
             if ((ForcePullMode)value == ForcePullMode.ANYTHING || (ForcePullMode)value == ForcePullMode.PER_ENTITY)
             {
-                Player.LeftHand.farHoverLayerMask = int.MaxValue;
-                Player.RightHand.farHoverLayerMask = int.MaxValue;
+                Player.LeftHand.farHoverLayerMask = PullAnythingMask;
+                Player.RightHand.farHoverLayerMask = PullAnythingMask;
             }
             else
             {
@@ -133,6 +134,7 @@ namespace InteractableSettings
     {
         private const float ForcePullGripIdentifier = -57f;
         private const float ExtraForcePullGripIdentifier = -58f;
+        private const float ForcePullMaxForceDefault = 250f;
 
         // Interactable Icon Hand Hover disable
         [HarmonyLib.HarmonyPatch(typeof(InteractableIcon), "MyHandHoverBegin")]
@@ -224,11 +226,11 @@ namespace InteractableSettings
                         ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
                         fpg.maxSpeed = ForcePullGripIdentifier;
                     }
-                }
-                else
-                {     // Execute if there is at least one Force Pull Grip already
-                    ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
-                    fpg.maxSpeed = ExtraForcePullGripIdentifier;
+                    else
+                    {     // Execute if there is at least one Force Pull Grip already
+                        ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
+                        fpg.maxSpeed = ExtraForcePullGripIdentifier;
+                    }
                 }
             }
         }
