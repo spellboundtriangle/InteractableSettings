@@ -1,0 +1,9 @@
+{	
+	"name": "InteractableSettings",
+	"version_number": "1.0.0",
+	"website_url": "https://github.com/spellboundtriangle/InteractableSettings",
+	"description": "Adds miscellaneous settings for interactables in BONELAB",
+	"dependencies": [
+		"bonelib-BoneLib-3.2.1"
+	]
+}
