@@ -10,7 +10,7 @@ using System.Runtime.CompilerServices;
 using Il2CppSLZ.Marrow.Interaction;
 
 
-[assembly: MelonInfo(typeof(InteractableSettings.InteractableSettingsMod), "Interactable Settings", "1.0.0", "triangle", "https://thunderstore.io/c/bonelab/p/spellboundtriangle/InteractableSettings")]
+[assembly: MelonInfo(typeof(InteractableSettings.InteractableSettingsMod), "Interactable Settings", "1.0.0", "triangle", "https://thunderstore.io/c/bonelab/p/triangle/InteractableSettings")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace InteractableSettings
@@ -19,7 +19,8 @@ namespace InteractableSettings
     {
         public static int PlayerHandLayerMask { get; set; }
         public static int FarHoverHandLayerMask { get; set; }
-        public const int PullAnythingMask = 2146959103; // Supposed to exlcude Player and Plug layers (8 and 19 respectively). Plug being allowed causes the Player layer to be force-grabbable for some reason
+        public const int PullAnythingMask = 2146959103; // Exlcudes Player and Plug layers (8 and 19 respectively). Plug being allowed causes the Player layer to be force-grabbable for some reason
+        public const float DefaultMaxForce = 250; // Set on all Force Pull Grips by default by SLZ
 
         // Preferences variables
         public enum ForcePullMode
@@ -29,6 +30,7 @@ namespace InteractableSettings
             ANYTHING,
             PER_ENTITY,
         }
+        public static FloatElement FPGMaxForce;
         public static MelonPreferences_Category InteractableSettings_Category;
         public static MelonPreferences_Entry<bool> InteractableIcon_HandHover_Enabled;
         public static MelonPreferences_Entry<bool> InteractableIcon_FarHandHover_Enabled;
@@ -42,7 +44,7 @@ namespace InteractableSettings
         public override void OnInitializeMelon()
         {
             // Init MelonLoader preferences
-            
+
             InteractableSettings_Category = MelonPreferences.CreateCategory("Interactable Settings");
             ForcePullGrip_AprilFooled = InteractableSettings_Category.CreateEntry("April Fools", false);
 
@@ -56,11 +58,11 @@ namespace InteractableSettings
                 }
                 Page BoneMenu_ForcePullGripPage = BoneMenu_MainPage.CreatePage("Force Pull Grip", Color.cyan);
                 {
-                    BoneMenu_ForcePullGripPage.CreateEnumPref("Force Pull", Color.cyan, ref ForcePullGrip_ForcePullMode, OnChangeForcePullMode, prefDefaultValue:ForcePullMode.ON);
+                    BoneMenu_ForcePullGripPage.CreateEnumPref("Force Pull", Color.cyan, ref ForcePullGrip_ForcePullMode, OnChangeForcePullMode, prefDefaultValue: ForcePullMode.ON);
                     BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Collision", Color.cyan, ref ForcePullGrip_Collision_Enabled, prefDefaultValue: true);
                     BoneMenu_ForcePullGripPage.CreateBoolPref("Force Pull Through Objects", Color.cyan, ref ForcePullGrip_ForcePullThroughObjects_Enabled, OnEnableForcePullThroughObjects, prefDefaultValue: false);
-                    FloatElement FPGMaxForce = BoneMenu_ForcePullGripPage.CreateFloatPref("Force Pull Max Force", Color.cyan, ref ForcePullGrip_MaxForce, 50f, -500000f, 500000f, prefDefaultValue: 250f);
-                        FPGMaxForce.SetTooltip("Default 250");
+                    FPGMaxForce = BoneMenu_ForcePullGripPage.CreateFloatPref("Force Pull Max Force", Color.cyan, ref ForcePullGrip_MaxForce, 50f, -500000f, 500000f, prefDefaultValue: 250f);
+                    BoneMenu_ForcePullGripPage.CreateFunction("Reset Max Force", Color.cyan, ResetMaxForce);
                     if (!ForcePullGrip_AprilFooled.Value && DateTime.Today.Month == 4 && DateTime.Today.Day == 1)
                     {
                         ForcePullGrip_MaxForce.Value = -750f;
@@ -94,7 +96,7 @@ namespace InteractableSettings
         }
 
         // BoneMenu methods
-        public static void SavePreferences() 
+        public static void SavePreferences()
         {
             InteractableSettings_Category.SaveToFile(false);
         }
@@ -126,15 +128,21 @@ namespace InteractableSettings
                 Player.RightHand.farHoverLayerMask = FarHoverHandLayerMask;
             }
         }
+
+        public static void ResetMaxForce()
+        {
+            ForcePullGrip_MaxForce.Value = DefaultMaxForce;
+            FPGMaxForce.Value = DefaultMaxForce;
+            SavePreferences();
+        }
     }
 
 
     [HarmonyLib.HarmonyPatch]
     public static class Patches
     {
-        private const float ForcePullGripIdentifier = -57f;
-        private const float ExtraForcePullGripIdentifier = -58f;
-        // private const float ForcePullMaxForceDefault = 250f;
+        private const float ForcePullGripIdentifier = -57f;      // These are arbitrarily set identifying numbers that are unlikely to be set by anyone else. 
+        private const float ExtraForcePullGripIdentifier = -58f; // The max speed property doesn't work anyways, so this should not be a problem.
 
         // Interactable Icon Hand Hover disable
         [HarmonyLib.HarmonyPatch(typeof(InteractableIcon), "MyHandHoverBegin")]
@@ -195,12 +203,10 @@ namespace InteractableSettings
         {
             if (!InteractableSettingsMod.ForcePullGrip_Collision_Enabled.Value)
             {
-                MarrowEntity entity = __instance._marrowEntity;
-                entity.EnableColliders(false);
+                __instance._marrowEntity.EnableColliders(false);
             }
-            ForcePullGrip fpg = __instance.GetComponent<ForcePullGrip>();
             {
-                fpg.maxForce = InteractableSettingsMod.ForcePullGrip_MaxForce.Value;
+                __instance.GetComponent<ForcePullGrip>().maxForce = InteractableSettingsMod.ForcePullGrip_MaxForce.Value;
             }
         }
 
@@ -211,8 +217,7 @@ namespace InteractableSettings
         {
             if (!InteractableSettingsMod.ForcePullGrip_Collision_Enabled.Value)
             {
-                MarrowEntity entity = __instance._marrowEntity;
-                entity.EnableColliders(true);
+                __instance._marrowEntity.EnableColliders(true);
             }
         }
 
@@ -227,13 +232,11 @@ namespace InteractableSettings
                 {     // Execute if there is no Force Pull Grip on the grip
                     if (!__instance.transform.root.gameObject.GetComponentInChildren<ForcePullGrip>())
                     { // Execute if there are no Force Pull Grips on the entire entity
-                        ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
-                        fpg.maxSpeed = ForcePullGripIdentifier;
+                        __instance.gameObject.AddComponent<ForcePullGrip>().maxSpeed = ForcePullGripIdentifier;
                     }
                     else
                     {     // Execute if there is at least one Force Pull Grip already
-                        ForcePullGrip fpg = __instance.gameObject.AddComponent<ForcePullGrip>();
-                        fpg.maxSpeed = ExtraForcePullGripIdentifier;
+                        __instance.gameObject.AddComponent<ForcePullGrip>().maxSpeed = ExtraForcePullGripIdentifier;
                     }
                 }
             }
