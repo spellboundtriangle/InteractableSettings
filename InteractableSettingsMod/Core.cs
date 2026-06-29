@@ -19,7 +19,7 @@ namespace InteractableSettings
     {
         public static int PlayerHandLayerMask { get; set; }
         public static int FarHoverHandLayerMask { get; set; }
-        public const int PullAnythingMask = -5269889; // Excludes player layer
+        public const int PullAnythingMask = 2146959103; // Supposed to exlcude Player and Plug layers (8 and 19 respectively). Plug being allowed causes the Player layer to be force-grabbable for some reason
 
         // Preferences variables
         public enum ForcePullMode
@@ -134,7 +134,7 @@ namespace InteractableSettings
     {
         private const float ForcePullGripIdentifier = -57f;
         private const float ExtraForcePullGripIdentifier = -58f;
-        private const float ForcePullMaxForceDefault = 250f;
+        // private const float ForcePullMaxForceDefault = 250f;
 
         // Interactable Icon Hand Hover disable
         [HarmonyLib.HarmonyPatch(typeof(InteractableIcon), "MyHandHoverBegin")]
@@ -152,36 +152,40 @@ namespace InteractableSettings
             return InteractableSettingsMod.InteractableIcon_FarHandHover_Enabled.Value;
         }
 
-        // Force Pull Grip disable
-        [HarmonyLib.HarmonyPatch(typeof(ForcePullGrip), "OnFarHandHoverUpdate")]
+        // Force Pull Grip mode
+        [HarmonyLib.HarmonyPatch(typeof(HandReciever), "get_IsFarHoverEnabled")]
         [HarmonyLib.HarmonyPrefix]
-        public static bool ForcePullGrip_OnFarHandHoverUpdateDisable(ForcePullGrip __instance)
+        public static bool ForcePullGrip_Mode(Grip __instance)
         {
-            switch (InteractableSettingsMod.ForcePullGrip_ForcePullMode.Value)
+            if (__instance)
             {
-                case InteractableSettingsMod.ForcePullMode.OFF:        // Never force pull
-                    return false;
-
-                case InteractableSettingsMod.ForcePullMode.ON:         // Only force pulls if not using either identifier float
-                    if (__instance.maxSpeed != ForcePullGripIdentifier && __instance.maxSpeed != ExtraForcePullGripIdentifier)
-                    {
-                        return true;
-                    }
-                    else return false;
-
-                case InteractableSettingsMod.ForcePullMode.ANYTHING:   // Always allow force pull
-                    return true;
-
-                case InteractableSettingsMod.ForcePullMode.PER_ENTITY: // Disallow force pull on identified "extra" force pulls
-                    if (__instance.maxSpeed == ExtraForcePullGripIdentifier)
-                    {
+                switch (InteractableSettingsMod.ForcePullGrip_ForcePullMode.Value)
+                {
+                    case InteractableSettingsMod.ForcePullMode.OFF:        // Never force pull
                         return false;
-                    }
-                    else return true;
 
-                default:
-                    return true;
+                    case InteractableSettingsMod.ForcePullMode.ON:         // Only force pulls if not using either identifier float
+                        if (__instance.GetComponent<ForcePullGrip>() && __instance.GetComponent<ForcePullGrip>().maxSpeed != ForcePullGripIdentifier && __instance.GetComponent<ForcePullGrip>().maxSpeed != ExtraForcePullGripIdentifier)
+                        {
+                            return true;
+                        }
+                        else return false;
+
+                    case InteractableSettingsMod.ForcePullMode.ANYTHING:   // Always allow force pull
+                        return true;
+
+                    case InteractableSettingsMod.ForcePullMode.PER_ENTITY: // Disallow force pull on identified "extra" force pulls
+                        if (__instance.GetComponent<ForcePullGrip>() && __instance.GetComponent<ForcePullGrip>().maxSpeed == ExtraForcePullGripIdentifier)
+                        {
+                            return false;
+                        }
+                        else return true;
+
+                    default:
+                        return true;
+                }
             }
+            return true;
         }
 
         // Force Pull Grip collision disable + Force Pull Max Force override
